@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock Sorter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --table: #f1f3f2;
+    --panel: #ffffff;
+    --ink: #161b20;
+    --slate: #5b6670;
+    --rule: #cbd2d6;
+    --frame: #1e252b;
+    --pencil: #e5372b;
+    --pencil-soft: #fdeceb;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 90px; }
+  body {
+    margin: 0;
+    background: var(--table);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--pencil); outline-offset: 2px; }
+
+  /* ---------- top bar ---------- */
+  .bar {
+    background: var(--frame);
+    color: #f1f3f2;
+    padding: 14px 24px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .bar h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .bar p { margin: 0; font-size: 13px; color: #9fabb4; }
+
+  .notice {
+    display: none;
+    background: var(--pencil);
+    color: #fff;
+    padding: 10px 24px;
+    font-weight: 500;
+  }
+  .notice.show { display: block; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+  /* ---------- drop zone ---------- */
+  .drop {
+    display: block;
+    border: 2px dashed var(--slate);
+    border-radius: 6px;
+    background: var(--panel);
+    padding: 72px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--pencil); background: var(--pencil-soft); }
+  .drop strong {
+    display: block;
+    font-family: var(--display);
+    font-size: clamp(26px, 4vw, 40px);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+  .drop span { color: var(--slate); }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+  /* ---------- API key ---------- */
+  .keybox {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin-bottom: 20px;
+  }
+  .keybox p { margin: 0 0 10px; color: var(--slate); font-size: 14px; }
+  .keybox .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .keybox input {
+    flex: 1 1 240px;
+    font: inherit;
+    padding: 10px 12px;
+    border: 1.5px solid var(--ink);
+    border-radius: 4px;
+    min-width: 0;
+  }
+  .keybox .err { color: var(--pencil); font-weight: 500; margin: 8px 0 0; min-height: 0; }
+  .keybox .err:empty { display: none; }
+  .keybox .saved { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 500; }
+  .keybox .saved button {
+    border: 0; background: none; padding: 0; text-decoration: underline; color: var(--slate); font-size: 14px;
+  }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--table);
+    padding: 14px 0;
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 20px;
+  }
+  .toolbar.show { display: flex; }
+  .count { font-weight: 600; margin-right: auto; }
+  .count small { font-weight: 400; color: var(--slate); margin-left: 8px; }
+
+  .btn {
+    border: 1.5px solid var(--ink);
+    background: var(--panel);
+    padding: 9px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn:hover { background: var(--ink); color: #fff; }
+  .btn.primary { background: var(--pencil); border-color: var(--pencil); color: #fff; }
+  .btn.primary:hover { background: #c22b20; border-color: #c22b20; }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+  .hidden { display: none !important; }
+
+  .progress {
+    flex-basis: 100%;
+    height: 6px;
+    background: var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress.show { display: block; }
+  .progress i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--pencil);
+    transition: width .3s;
+  }
+  .phase { flex-basis: 100%; font-size: 13px; color: var(--slate); display: none; }
+  .phase.show { display: block; }
+
+  /* ---------- contact sheet ---------- */
+  .sheet {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 16px;
+  }
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .tile .thumb {
+    aspect-ratio: 4 / 3;
+    background: var(--frame);
+    display: grid;
+    place-items: center;
+    color: #9fabb4;
+    font-size: 12px;
+    overflow: hidden;
+  }
+  .tile .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.processing .thumb { outline: 3px solid var(--pencil); outline-offset: -3px; }
+  .tile.error { border-color: var(--pencil); }
+
+  .remove {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(22, 27, 32, .78);
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .remove:hover { background: var(--pencil); }
+
+  .cap { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; min-height: 92px; }
+  .orig {
+    font-size: 12px;
+    color: var(--slate);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cat {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 17px;
+    line-height: 1.2;
+    width: fit-content;
+    background: linear-gradient(var(--pencil), var(--pencil)) no-repeat 0 100% / 0 3px;
+  }
+  .tile.done .cat { background-size: 100% 3px; transition: background-size .5s ease-out; padding-bottom: 2px; }
+  .ttl { font-size: 13px; }
+  .state { font-size: 13px; color: var(--slate); }
+  .tile.error .state { color: var(--pencil); font-weight: 500; }
+
+  .kw { font-size: 12px; color: var(--slate); display: none; }
+  .tile.open .kw { display: block; }
+  .more {
+    margin-top: auto;
+    align-self: flex-start;
+    border: 0;
+    background: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--ink);
+    text-decoration: underline;
+    display: none;
+  }
+  .tile.done .more { display: inline; }
+
+  @media (max-width: 560px) {
+    main { padding: 16px; }
+    .bar { padding: 12px 16px; flex-direction: column; gap: 2px; }
+    .drop { padding: 48px 16px; }
+    .sheet { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1>Stock Sorter</h1>
+  <p>Rename, title and tag your images for Adobe Stock. Originals stay untouched.</p>
+</header>
+
+<main>
+  <section id="keybox" class="keybox" aria-label="Gemini API key">
+    <div id="keyForm">
+      <p>Paste your Gemini API key. It is saved only in this browser on this device and is sent only to Google.</p>
+      <div class="row">
+        <input id="keyInput" type="password" placeholder="Gemini API key" aria-label="Gemini API key" autocomplete="off">
+        <button id="keySave" class="btn" type="button">Save key</button>
+      </div>
+    </div>
+    <div id="keyState" class="saved hidden">
+      <span>API key saved on this device</span>
+      <button id="keyChange" type="button">Change key</button>
+    </div>
+    <p id="keyErr" class="err" role="alert"></p>
+  </section>
+
+  <label id="drop" class="drop" for="picker">
+    <strong>Drop your images here</strong>
+    <span>or tap to choose files. PNG, JPG, WEBP, BMP, GIF, TIFF.</span>
+    <input id="picker" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff,image/*" multiple>
+  </label>
+
+  <div id="toolbar" class="toolbar">
+    <div class="count"><span id="count">0 images</span><small id="sub"></small></div>
+    <button id="addMore" class="btn" type="button">Add more</button>
+    <button id="clear" class="btn" type="button">Clear all</button>
+    <button id="start" class="btn primary" type="button">Sort and tag images</button>
+    <button id="stop" class="btn hidden" type="button">Stop</button>
+    <a id="dlZip" class="btn primary hidden" href="#">Download ZIP</a>
+    <a id="dlCsv" class="btn hidden" href="#">CSV only</a>
+    <button id="again" class="btn hidden" type="button">Start a new batch</button>
+    <div id="phase" class="phase" aria-live="polite"></div>
+    <div id="progress" class="progress"><i id="bar"></i></div>
+  </div>
+
+  <section id="sheet" class="sheet" aria-label="Images"></section>
+</main>
+
+<script>
+var SS_CORE = (function () {
+  "use strict";
+
+  const MAX_CATEGORY_WORDS = 3;
+  const MAX_FILENAME_LENGTH = 80;
+  const TITLE_MAX = 70;        // Adobe Stock: 70 characters or fewer
+  const KEYWORDS_MAX = 49;     // Adobe Stock: 50 max, 49 is the safe number
+  const MAX_RETRIES = 4;
+  const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+  const ADOBE_CATEGORIES = {
+    1: "Animals", 2: "Buildings and Architecture", 3: "Business", 4: "Drinks",
+    5: "The Environment", 6: "States of Mind", 7: "Food", 8: "Graphic Resources",
+    9: "Hobbies and Leisure", 10: "Industry", 11: "Landscapes", 12: "Lifestyle",
+    13: "People", 14: "Plants and Flowers", 15: "Culture and Religion", 16: "Science",
+    17: "Social Issues", 18: "Sports", 19: "Technology", 20: "Transport", 21: "Travel",
+  };
+
+  const PROMPT = `
+Analyze this image carefully and prepare stock-marketplace metadata for it.
+
+Return ONLY a JSON object with exactly these keys:
+
+{
+  "category": "...",
+  "title": "...",
+  "keywords": ["...", "..."],
+  "adobe_category": 0
+}
+
+RULES FOR "category" (used as a file name):
+- English, lowercase, maximum 3 words, underscores between words.
+- No punctuation, no quotes, no explanation.
+- Do not use the words: image, photo, picture, artwork, design.
+- Focus on the MAIN subject, ignore the background unless it is the subject.
+- Use a generic commercial category. Examples: cat, red_car, coffee_cup,
+  birthday_cake, flower_bouquet, mountain_landscape, smartphone, office_desk.
+
+RULES FOR "title":
+- English, a simple factual description of what is visible.
+- 70 characters or fewer. No commas. No quotation marks.
+- No brand names, no names of real people, no technical camera data.
+
+RULES FOR "keywords":
+- English, between 25 and 49 keywords, ordered from MOST to LEAST relevant.
+- The first 10 must be the strongest. Single words or very short phrases.
+- Describe subject, setting, colors, mood, concept and use.
+- No brand names, no names of real people, no camera or technical data.
+- Do not invent details that are not visible.
+
+RULES FOR "adobe_category": the single best number from this list:
+${Object.entries(ADOBE_CATEGORIES).map(([n, l]) => n + " = " + l).join("\n")}
+
+Return ONLY the JSON. No markdown, no explanation.
+`;
+
+  /* ---------------- cleaning (ported from organizer.py) ---------------- */
+
+  function cleanCategory(text) {
+    if (!text) return "unknown_category";
+    let t = String(text).trim().replace(/```[a-zA-Z]*/g, "").replace(/[`"']/g, "");
+    const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return "unknown_category";
+    t = lines[0].replace(/_/g, " ").toLowerCase().replace(/[^a-z\s]/g, " ");
+    const words = t.split(/\s+/).filter(Boolean).slice(0, MAX_CATEGORY_WORDS);
+    if (!words.length) return "unknown_category";
+    const c = words.join("_").slice(0, MAX_FILENAME_LENGTH).replace(/[^a-z0-9_]/g, "");
+    return c || "unknown_category";
+  }
+
+  function cleanTitle(text) {
+    let t = String(text || "").replace(/\s+/g, " ").trim();
+    t = t.replace(/,/g, " ").replace(/"/g, "").replace(/\s+/g, " ").replace(/^[ .]+|[ .]+$/g, "");
+    if (t.length > TITLE_MAX) {
+      let cut = t.slice(0, TITLE_MAX);
+      if (cut.includes(" ")) cut = cut.slice(0, cut.lastIndexOf(" "));
+      t = cut.trim();
+    }
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+  }
+
+  function cleanKeywords(items) {
+    if (typeof items === "string") items = items.split(",");
+    const out = [], seen = new Set();
+    for (const item of items || []) {
+      let kw = String(item).replace(/\s+/g, " ").trim().replace(/^\.+|\.+$/g, "").toLowerCase();
+      kw = kw.replace(/,/g, " ").replace(/"/g, "").trim();
+      if (!kw || seen.has(kw)) continue;
+      seen.add(kw);
+      out.push(kw);
+      if (out.length >= KEYWORDS_MAX) break;
+    }
+    return out;
+  }
+
+  function parseModelJson(text) {
+    if (!text) throw new Error("empty response");
+    text = String(text).replace(/```[a-zA-Z]*/g, "").replace(/```/g, "").trim();
+    try { return JSON.parse(text); }
+    catch (e) {
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) throw e;
+      return JSON.parse(m[0]);
+    }
+  }
+
+  function normalizeMetadata(raw) {
+    const category = cleanCategory(raw.category);
+    let title = cleanTitle(raw.title);
+    const keywords = cleanKeywords(raw.keywords);
+    let adobe = parseInt(raw.adobe_category, 10);
+    if (!ADOBE_CATEGORIES[adobe]) adobe = 0;
+    if (category === "unknown_category") throw new Error("model returned no usable category");
+    if (!title) {
+      title = category.replace(/_/g, " ");
+      title = title.charAt(0).toUpperCase() + title.slice(1);
+    }
+    return { category, title, keywords, adobe_category: adobe };
+  }
+
+  /* ---------------- Gemini over HTTPS ---------------- */
+
+  function GeminiError(message, code) {
+    const e = new Error(message);
+    e.code = code || null;
+    e.isGemini = true;
+    return e;
+  }
+
+  function isFatal(e) {
+    return e && e.isGemini && (e.code === 401 || e.code === 403 ||
+      (e.code === 400 && /api key/i.test(e.message)));
+  }
+
+  async function geminiRequest(ctx, path, payload) {
+    const sep = path.includes("?") ? "&" : "?";
+    const url = `${ctx.apiBase || API_BASE}/${path}${sep}key=${encodeURIComponent(ctx.apiKey)}`;
+    let resp;
+    try {
+      resp = await ctx.fetchFn(url, payload === undefined ? {} : {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      throw GeminiError("Network error. Check your internet connection.", null);
+    }
+    if (!resp.ok) {
+      let msg = "";
+      try { msg = (await resp.json()).error.message; } catch (_) { msg = resp.statusText; }
+      throw GeminiError(`Gemini error ${resp.status}: ${msg}`, resp.status);
+    }
+    return resp.json();
+  }
+
+  async function findBestModel(ctx) {
+    const preferred = [
+      "gemini-flash-lite-latest", "gemini-3-flash-preview", "gemini-flash-latest",
+      "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash",
+    ];
+    let candidates = [];
+    try {
+      const listing = await geminiRequest(ctx, "models?pageSize=200");
+      for (const m of listing.models || []) {
+        const methods = m.supportedGenerationMethods || ["generateContent"];
+        const name = (m.name || "").replace("models/", "");
+        if (name.startsWith("gemini") && methods.includes("generateContent") &&
+            !["embedding", "bidi", "imagen", "veo", "tts"].some(x => name.includes(x))) {
+          candidates.push(name);
+        }
+      }
+      candidates = [...new Set(candidates)];
+    } catch (e) {
+      if (isFatal(e)) throw e;
+    }
+    if (candidates.length) {
+      for (const p of preferred) for (const n of candidates) if (p === n || n.includes(p)) return n;
+      return candidates[0];
+    }
+    return "gemini-flash-lite-latest";
+  }
+
+  async function analyzeImage(ctx, jpegBase64) {
+    const payload = {
+      contents: [{ parts: [
+        { inlineData: { mimeType: "image/jpeg", data: jpegBase64 } },
+        { text: PROMPT },
+      ] }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+    };
+    let lastError = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (!ctx.model) ctx.model = await findBestModel(ctx);
+        const result = await geminiRequest(ctx, `models/${ctx.model}:generateContent`, payload);
+        const parts = (((result.candidates || [])[0] || {}).content || {}).parts || [];
+        const text = parts.map(p => p.text || "").join("");
+        return normalizeMetadata(parseModelJson(text));
+      } catch (e) {
+        lastError = e;
+        if (isFatal(e) || (e.isGemini && e.code === 404)) throw e;
+        if (e.isGemini && e.code === 400) break;
+      }
+      if (attempt < MAX_RETRIES) await ctx.sleep(attempt * 4000);
+    }
+    throw lastError || new Error("Gemini failed");
+  }
+
+  /* ---------------- batch runner ---------------- */
+
+  // items: [{ name, file }]  getJpeg(file) -> base64 string of a small temporary JPEG
+  async function runBatch(opts) {
+    const ctx = {
+      apiKey: opts.apiKey,
+      apiBase: opts.apiBase,
+      fetchFn: opts.fetchFn,
+      sleep: opts.sleep || (ms => new Promise(r => setTimeout(r, ms))),
+      model: null,
+    };
+    const counters = {};
+    const usedNames = new Set();
+    const states = opts.items.map((it, index) => ({ index, name: it.name, status: "pending" }));
+    let fatal = null;
+
+    for (let i = 0; i < opts.items.length; i++) {
+      if (opts.shouldStop && opts.shouldStop()) break;
+      const s = states[i];
+      s.status = "processing";
+      opts.onUpdate && opts.onUpdate(i, s);
+      try {
+        let jpeg;
+        try { jpeg = await opts.getJpeg(opts.items[i].file); }
+        catch (e) { throw new Error("Invalid image, or this browser cannot read the format"); }
+
+        const meta = await analyzeImage(ctx, jpeg);
+
+        const dot = s.name.lastIndexOf(".");
+        const ext = dot >= 0 ? s.name.slice(dot).toLowerCase() : "";
+        let newName;
+        for (;;) {
+          counters[meta.category] = (counters[meta.category] || 0) + 1;
+          newName = `${meta.category}_${counters[meta.category]}${ext}`;
+          if (!usedNames.has(newName)) { usedNames.add(newName); break; }
+        }
+        Object.assign(s, {
+          status: "done", category: meta.category, new_name: newName,
+          title: meta.title, keywords: meta.keywords, adobe_category: meta.adobe_category,
+        });
+      } catch (e) {
+        s.status = "error";
+        s.error = String(e.message || e).slice(0, 200);
+        if (isFatal(e)) {
+          fatal = "Stopped: " + s.error;
+          opts.onUpdate && opts.onUpdate(i, s);
+          break;
+        }
+      }
+      opts.onUpdate && opts.onUpdate(i, s);
+      if (i < opts.items.length - 1) await ctx.sleep(opts.delayMs == null ? 2000 : opts.delayMs);
+    }
+    return { states, fatal };
+  }
+
+  /* ---------------- CSV + ZIP ---------------- */
+
+  function csvEscape(v) {
+    v = String(v == null ? "" : v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function buildCsv(states) {
+    const rows = [["Filename", "Title", "Keywords", "Category", "Releases"]];
+    for (const f of states) {
+      if (f.status === "done") {
+        rows.push([f.new_name, f.title, f.keywords.join(","), f.adobe_category || "", ""]);
+      }
+    }
+    return "\ufeff" + rows.map(r => r.map(csvEscape).join(",")).join("\r\n") + "\r\n";
+  }
+
+  let crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  // ZIP with no compression ("stored"): image bytes go in exactly as they are.
+  async function buildZip(entries) {
+    const enc = new TextEncoder();
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const parts = [], central = [];
+    let offset = 0;
+
+    for (const e of entries) {
+      const nameBytes = enc.encode(e.name);
+      const data = e.data instanceof Uint8Array ? e.data : new Uint8Array(await e.data.arrayBuffer());
+      const crc = crc32(data);
+      const size = data.length;
+
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint16(8, 0, true); lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+      lh.setUint16(26, nameBytes.length, true); lh.setUint16(28, 0, true);
+      parts.push(lh.buffer, nameBytes, data);
+
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+      ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+      ch.setUint16(28, nameBytes.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true);
+      ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true);
+      ch.setUint32(42, offset, true);
+      central.push(ch.buffer, nameBytes);
+
+      offset += 30 + nameBytes.length + size;
+    }
+
+    const centralSize = central.reduce((n, p) => n + (p.byteLength != null ? p.byteLength : p.length), 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true);
+    end.setUint16(10, entries.length, true); end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true);
+
+    return new Blob([...parts, ...central, end.buffer], { type: "application/zip" });
+  }
+
+  function stamp() {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  }
+
+  async function buildOutputs(states, files) {
+    const csvName = `AdobeStock_metadata_${stamp()}.csv`;
+    const csvText = buildCsv(states);
+    const entries = [{ name: csvName, data: new TextEncoder().encode(csvText) }];
+    const usedErr = new Set();
+    states.forEach((s, i) => {
+      if (s.status === "done") {
+        entries.push({ name: `images/${s.new_name}`, data: files[i] });
+      } else if (s.status === "error") {
+        const dot = s.name.lastIndexOf(".");
+        const stem = dot > 0 ? s.name.slice(0, dot) : s.name;
+        const ext = dot > 0 ? s.name.slice(dot) : "";
+        let n = 1, cand;
+        for (;;) { cand = `${stem}_error_${n}${ext}`; if (!usedErr.has(cand)) { usedErr.add(cand); break; } n++; }
+        entries.push({ name: `errors/${cand}`, data: files[i] });
+      }
+    });
+    return {
+      csvName, csvText,
+      csvBlob: new Blob([csvText], { type: "text/csv;charset=utf-8" }),
+      zipBlob: await buildZip(entries),
+      zipName: `stock_sorted_${stamp()}.zip`,
+    };
+  }
+
+  return {
+    cleanCategory, cleanTitle, cleanKeywords, parseModelJson, normalizeMetadata,
+    runBatch, buildCsv, buildZip, buildOutputs, crc32,
+  };
+})();
+
+</script>
+<script>
+(() => {
+  const C = SS_CORE;
+  const VALID = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i;
+  const KEY_NAME = "stock_sorter_gemini_key";
+  const $ = (id) => document.getElementById(id);
+
+  const el = {
+    drop: $("drop"), picker: $("picker"), toolbar: $("toolbar"), sheet: $("sheet"),
+    count: $("count"), sub: $("sub"), start: $("start"), stop: $("stop"), clear: $("clear"),
+    addMore: $("addMore"), dlZip: $("dlZip"), dlCsv: $("dlCsv"), again: $("again"),
+    phase: $("phase"), progress: $("progress"), bar: $("bar"),
+    keybox: $("keybox"), keyInput: $("keyInput"), keySave: $("keySave"),
+    keyState: $("keyState"), keyChange: $("keyChange"), keyForm: $("keyForm"), keyErr: $("keyErr"),
+  };
+
+  let items = [];          // { file, url, node }
+  let running = false;
+  let finished = false;
+  let stopRequested = false;
+  let downloadUrls = [];
+
+  /* ---------- API key (kept only in this browser) ---------- */
+  function getKey() { try { return localStorage.getItem(KEY_NAME) || ""; } catch (_) { return memoryKey; } }
+  let memoryKey = "";
+  function setKey(v) {
+    memoryKey = v;
+    try { v ? localStorage.setItem(KEY_NAME, v) : localStorage.removeItem(KEY_NAME); } catch (_) {}
+  }
+  function showKeyState() {
+    const has = !!getKey();
+    el.keyForm.classList.toggle("hidden", has);
+    el.keyState.classList.toggle("hidden", !has);
+    el.keyErr.textContent = "";
+  }
+  el.keySave.onclick = () => {
+    const v = el.keyInput.value.trim();
+    if (v.length < 20) { el.keyErr.textContent = "That does not look like a Gemini API key."; return; }
+    setKey(v); el.keyInput.value = ""; showKeyState();
+  };
+  el.keyInput.addEventListener("keydown", e => { if (e.key === "Enter") el.keySave.click(); });
+  el.keyChange.onclick = () => { setKey(""); showKeyState(); el.keyInput.focus(); };
+  showKeyState();
+
+  /* ---------- adding files ---------- */
+  function addFiles(list) {
+    if (running || finished) return;
+    const known = new Set(items.map(i => `${i.file.name}|${i.file.size}|${i.file.lastModified}`));
+    for (const file of list) {
+      if (!VALID.test(file.name)) continue;
+      const key = `${file.name}|${file.size}|${file.lastModified}`;
+      if (known.has(key)) continue;
+      known.add(key);
+      const item = { file, url: URL.createObjectURL(file), node: null };
+      item.node = makeTile(item);
+      items.push(item);
+      el.sheet.appendChild(item.node);
+    }
+    refresh();
+  }
+
+  function makeTile(item) {
+    const t = document.createElement("article");
+    t.className = "tile";
+    t.innerHTML = `
+      <div class="thumb"><img alt=""></div>
+      <button class="remove" type="button" aria-label="Remove image">&times;</button>
+      <div class="cap">
+        <div class="orig"></div>
+        <div class="cat"></div>
+        <div class="ttl"></div>
+        <div class="state">Ready</div>
+        <div class="kw"></div>
+        <button class="more" type="button">Show keywords</button>
+      </div>`;
+    const img = t.querySelector("img");
+    img.src = item.url;
+    img.onerror = () => { img.remove(); t.querySelector(".thumb").textContent = "No preview"; };
+    t.querySelector(".orig").textContent = item.file.name;
+    t.querySelector(".orig").title = item.file.name;
+    t.querySelector(".remove").onclick = () => {
+      if (running || finished) return;
+      URL.revokeObjectURL(item.url);
+      items = items.filter(i => i !== item);
+      t.remove();
+      refresh();
+    };
+    const more = t.querySelector(".more");
+    more.onclick = () => {
+      const open = t.classList.toggle("open");
+      more.textContent = open ? "Hide keywords" : `Show ${more.dataset.n || ""} keywords`;
+    };
+    return t;
+  }
+
+  function refresh() {
+    const has = items.length > 0;
+    el.drop.classList.toggle("hidden", has);
+    el.toolbar.classList.toggle("show", has);
+    el.count.textContent = `${items.length} image${items.length === 1 ? "" : "s"}`;
+    el.start.classList.toggle("hidden", running || finished);
+    el.start.disabled = !has;
+    el.stop.classList.toggle("hidden", !running);
+    el.addMore.classList.toggle("hidden", running || finished);
+    el.clear.classList.toggle("hidden", running || finished);
+    el.again.classList.toggle("hidden", !finished);
+    document.querySelectorAll(".remove").forEach(b => b.classList.toggle("hidden", running || finished));
+  }
+
+  el.picker.addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+  el.addMore.onclick = () => el.picker.click();
+  el.clear.onclick = reset;
+  el.again.onclick = reset;
+  el.stop.onclick = () => { stopRequested = true; el.stop.disabled = true; setPhase("Stopping after the current image…", null); };
+
+  ["dragenter", "dragover"].forEach(ev => document.addEventListener(ev, e => {
+    e.preventDefault(); el.drop.classList.add("over");
+  }));
+  ["dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => {
+    e.preventDefault(); el.drop.classList.remove("over");
+  }));
+  document.addEventListener("drop", e => addFiles(e.dataTransfer.files));
+
+  function reset() {
+    items.forEach(i => URL.revokeObjectURL(i.url));
+    downloadUrls.forEach(u => URL.revokeObjectURL(u)); downloadUrls = [];
+    items = []; running = false; finished = false; stopRequested = false;
+    el.sheet.innerHTML = "";
+    el.dlZip.classList.add("hidden"); el.dlCsv.classList.add("hidden");
+    el.progress.classList.remove("show"); el.phase.classList.remove("show");
+    el.bar.style.width = "0"; el.sub.textContent = ""; el.stop.disabled = false;
+    refresh();
+  }
+
+  function setPhase(text, pct) {
+    el.phase.textContent = text;
+    el.phase.classList.add("show");
+    el.progress.classList.add("show");
+    if (pct != null) el.bar.style.width = pct + "%";
+  }
+
+  /* ---------- small temporary JPEG for Gemini (the original is never touched) ---------- */
+  async function makeAnalysisJpeg(file) {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);   // flatten transparency like convert("RGB")
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    canvas.width = canvas.height = 0;
+    return dataUrl.split(",")[1];
+  }
+
+  /* ---------- run ---------- */
+  el.start.onclick = async () => {
+    if (!items.length) return;
+    if (!getKey()) { el.keyErr.textContent = "Add your Gemini API key first."; el.keyInput.focus(); el.keybox.scrollIntoView({ block: "center" }); return; }
+
+    running = true; stopRequested = false; refresh();
+    const started = Date.now();
+    const batch = items.slice();
+    batch.forEach(i => setTile(i.node, { status: "pending" }, "Waiting"));
+    setPhase(`Analysed 0 of ${batch.length}`, 0);
+    let processed = 0;
+
+    try {
+      const { states, fatal } = await C.runBatch({
+        items: batch.map(i => ({ name: i.file.name, file: i.file })),
+        apiKey: getKey(),
+        fetchFn: (...a) => fetch(...a),
+        getJpeg: makeAnalysisJpeg,
+        delayMs: 2000,
+        shouldStop: () => stopRequested,
+        onUpdate: (i, s) => {
+          setTile(batch[i].node, s);
+          if (s.status === "done" || s.status === "error") {
+            processed++;
+            setPhase(`Analysed ${processed} of ${batch.length}`, (processed / batch.length) * 100);
+          }
+        },
+      });
+
+      const ready = states.filter(s => s.status === "done" || s.status === "error");
+      const doneCount = states.filter(s => s.status === "done").length;
+      const errCount = states.filter(s => s.status === "error").length;
+
+      if (!ready.length) throw new Error(fatal || "Nothing was processed.");
+
+      setPhase("Packing your ZIP…", 100);
+      const out = await C.buildOutputs(
+        states.map(s => s.status === "pending" ? { ...s, status: "skipped" } : s),
+        batch.map(i => i.file)
+      );
+
+      const zipUrl = URL.createObjectURL(out.zipBlob);
+      const csvUrl = URL.createObjectURL(out.csvBlob);
+      downloadUrls.push(zipUrl, csvUrl);
+      el.dlZip.href = zipUrl; el.dlZip.download = out.zipName;
+      el.dlCsv.href = csvUrl; el.dlCsv.download = out.csvName;
+      el.dlZip.classList.remove("hidden"); el.dlCsv.classList.remove("hidden");
+
+      running = false; finished = true; refresh();
+      const secs = Math.round((Date.now() - started) / 1000);
+      el.sub.textContent = `${doneCount} sorted, ${errCount} with errors, ${secs}s`;
+      setPhase(fatal ? fatal + " Partial results are ready to download."
+        : errCount ? "Done. Images that failed are in the errors folder inside the ZIP."
+        : "Done. Your ZIP has the renamed images and the Adobe Stock CSV.", 100);
+    } catch (err) {
+      running = false; refresh();
+      setPhase("Something went wrong: " + err.message, null);
+    }
+  };
+
+  function setTile(node, f, text) {
+    node.classList.remove("processing", "done", "error");
+    const state = node.querySelector(".state");
+    const cat = node.querySelector(".cat");
+    const ttl = node.querySelector(".ttl");
+    const kw = node.querySelector(".kw");
+
+    if (f.status === "processing") {
+      node.classList.add("processing"); state.textContent = "Analysing…";
+    } else if (f.status === "done") {
+      node.classList.add("done");
+      cat.textContent = f.new_name;
+      ttl.textContent = f.title;
+      kw.textContent = f.keywords.join(", ");
+      const more = node.querySelector(".more");
+      more.dataset.n = f.keywords.length;
+      more.textContent = `Show ${f.keywords.length} keywords`;
+      state.textContent = "";
+    } else if (f.status === "error") {
+      node.classList.add("error");
+      state.textContent = f.error || "Could not process this image";
+    } else {
+      state.textContent = text || "Waiting";
+    }
+  }
+
+  window.addEventListener("beforeunload", e => { if (running) { e.preventDefault(); e.returnValue = ""; } });
+})();
+
+</script>
+</body>
+</html>
